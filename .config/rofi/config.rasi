@@ -1,0 +1,10 @@
+/* ~/.config/rofi/config.rasi */
+configuration {
+    modi: "drun,run,window"; /* Modes to enable */
+    show-icons: true;
+    theme: "catppuccin-mocha"; /* Or latte, frappe, macchiato */
+    font: "JetBrainsMono Nerd Font 12"; /* Adjust font and size */
+}
+
+/* You might need to explicitly include the theme file if just the name doesn't work */
+@theme "catppuccin-mocha.rasi"
