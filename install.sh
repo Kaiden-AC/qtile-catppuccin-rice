@@ -87,6 +87,7 @@ CORE_DEPS=(
     pamixer # Volume control command-line tool
     brightnessctl # Brightness control command-line tool
     git # Needed for cloning themes
+    curl # Needed for fetching papirus-folders script
 )
 
 sudo pacman -S --needed --noconfirm "${CORE_DEPS[@]}" || { print_error "Failed to install core dependencies."; exit 1; }
@@ -119,36 +120,53 @@ else
     print_warning "Failed to clone Catppuccin GTK theme repository."
 fi
 
-
-# Clone and setup Papirus Folders - Revised Logic
+# Setup Papirus Folders following Catppuccin README instructions
 print_info "Setting up Catppuccin Papirus folder colors..."
-# Ensure papirus-icon-theme is installed (should be from CORE_DEPS)
-# This package provides /usr/bin/papirus-folders
-if ! command -v papirus-folders &> /dev/null; then
-    print_warning "'papirus-folders' command not found. Please ensure 'papirus-icon-theme' package is installed correctly."
-    # Optionally attempt to install again or exit
-    # sudo pacman -S --needed --noconfirm papirus-icon-theme || { print_error "Failed to install papirus-icon-theme."; exit 1; }
-    # if ! command -v papirus-folders &> /dev/null; then
-    #    print_error "'papirus-folders' still not found after attempting install. Cannot apply colors."
-    #    # Skip the rest of papirus setup
-    #    continue_script=false # Needs a flag or way to skip if erroring here
-    # fi
-fi
 
-if command -v papirus-folders &> /dev/null; then
+# Ensure papirus-icon-theme is installed (should be from CORE_DEPS)
+if ! pacman -Q papirus-icon-theme &> /dev/null; then
+     print_warning "'papirus-icon-theme' package not found. Attempting install..."
+     sudo pacman -S --needed --noconfirm papirus-icon-theme || { print_error "Failed to install papirus-icon-theme."; exit 1; }
+fi
+if ! pacman -Q papirus-icon-theme &> /dev/null; then
+    print_error "'papirus-icon-theme' is required but could not be installed. Skipping Papirus folder setup."
+    # Set a flag or find a way to skip if this is critical
+    papirus_setup_failed=true
+else
+    papirus_setup_failed=false
+    # Clone the Catppuccin papirus-folders repo for the color definitions
+    print_info "Cloning Catppuccin Papirus color definitions..."
     if git clone --depth 1 https://github.com/catppuccin/papirus-folders.git "$TEMP_DIR/catppuccin-papirus-folders"; then
         # Check if the src directory with color definitions exists
         if [ -d "$TEMP_DIR/catppuccin-papirus-folders/src" ] && [ "$(ls -A "$TEMP_DIR/catppuccin-papirus-folders/src")" ]; then
-             print_info "Copying Catppuccin Papirus color definitions..."
-             sudo cp -r "$TEMP_DIR/catppuccin-papirus-folders/src/"* /usr/share/icons/ || print_warning "Failed to copy Papirus base color folders from Catppuccin repo src/."
+             # Ensure the target directory exists (as per Catppuccin README)
+             print_info "Ensuring target directory /usr/share/icons/Papirus/ exists..."
+             sudo mkdir -p "/usr/share/icons/Papirus/" || print_warning "Failed to create target directory /usr/share/icons/Papirus/"
 
-             # Now attempt to apply the theme color using the system's papirus-folders script
-             print_info "Applying Catppuccin folder color variant (Mauve)..."
-             if sudo papirus-folders -C cat-mauve --theme Papirus-Dark; then
-                 print_success "Catppuccin Mauve variant applied for Papirus-Dark icons."
-                 print_info "You may need to re-run 'sudo papirus-folders -C <color> --theme <Papirus-Theme>' if you change the base Papirus theme."
+             print_info "Copying Catppuccin Papirus color definitions to /usr/share/icons/Papirus/ ..."
+             sudo cp -r "$TEMP_DIR/catppuccin-papirus-folders/src/"* "/usr/share/icons/Papirus/" || print_warning "Failed to copy Papirus color definitions from Catppuccin repo src/."
+
+             # Download the main papirus-folders script (as per Catppuccin README)
+             PAPIRUS_SCRIPT_URL="https://raw.githubusercontent.com/PapirusDevelopmentTeam/papirus-folders/master/papirus-folders"
+             PAPIRUS_SCRIPT_DEST="$TEMP_DIR/papirus-folders-script" # Download to temp dir
+             print_info "Downloading latest papirus-folders script from $PAPIRUS_SCRIPT_URL..."
+             if curl -L --fail -o "$PAPIRUS_SCRIPT_DEST" "$PAPIRUS_SCRIPT_URL"; then
+                 print_info "Making downloaded script executable..."
+                 if chmod +x "$PAPIRUS_SCRIPT_DEST"; then
+                     # Apply the theme color using the downloaded script
+                     print_info "Applying Catppuccin folder color variant (Mauve) using downloaded script..."
+                     # Need sudo to run the script as it modifies system icons/cache
+                     if sudo "$PAPIRUS_SCRIPT_DEST" -C cat-mauve --theme Papirus-Dark; then
+                         print_success "Catppuccin Mauve variant applied for Papirus-Dark icons."
+                         print_info "Run '$PAPIRUS_SCRIPT_DEST -C <color> --theme <Papirus-Theme>' manually to change colors later (or re-run installer)."
+                     else
+                         print_warning "Command '$PAPIRUS_SCRIPT_DEST -C cat-mauve --theme Papirus-Dark' failed. Check script output and permissions."
+                     fi
+                 else
+                     print_warning "Failed to make downloaded papirus-folders script executable at $PAPIRUS_SCRIPT_DEST."
+                 fi
              else
-                 print_warning "Command 'papirus-folders -C cat-mauve --theme Papirus-Dark' failed. Ensure colors were copied correctly to /usr/share/icons/ and Papirus-Dark theme exists."
+                 print_warning "Failed to download papirus-folders script from $PAPIRUS_SCRIPT_URL. Check network or URL."
              fi
         else
              print_warning "Could not find src/ directory with color folders in the cloned Catppuccin Papirus repo."
@@ -156,9 +174,12 @@ if command -v papirus-folders &> /dev/null; then
     else
         print_warning "Failed to clone Catppuccin Papirus Folders repository."
     fi
-else
-     print_warning "Skipping Papirus color application because 'papirus-folders' command was not found."
-fi
+fi # End check for papirus-icon-theme package
+
+# Optional: Clean up downloaded script if needed, though trap should handle TEMP_DIR
+# if [ -f "$PAPIRUS_SCRIPT_DEST" ]; then
+#     # rm "$PAPIRUS_SCRIPT_DEST" # Trap cleans the whole dir anyway
+# fi
 
 # --- Create Necessary Directories ---
 print_info "Creating configuration directories..."
