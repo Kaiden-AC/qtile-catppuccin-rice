@@ -10,8 +10,8 @@ set -e
 REPO_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )" # Gets the directory where the script is located
 CONFIG_SOURCE_DIR="$REPO_DIR/.config"
 CONFIG_DEST_DIR="$HOME/.config"
-WALLPAPER_SRC="$REPO_DIR/wallpaper/catppuccin_wallpaper.jpg"
-WALLPAPER_DEST="$CONFIG_DEST_DIR/qtile/wallpaper.jpg" # Destination expected by autostart.sh
+WALLPAPER_SRC="$REPO_DIR/wallpaper/catppuccin_wallpaper.png"
+WALLPAPER_DEST="$CONFIG_DEST_DIR/qtile/catppuccin_wallpaper.png" # Destination expected by autostart.sh
 
 # --- Functions ---
 print_info() {
