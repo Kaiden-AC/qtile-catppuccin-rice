@@ -87,7 +87,6 @@ CORE_DEPS=(
     pamixer # Volume control command-line tool
     brightnessctl # Brightness control command-line tool
     git # Needed for cloning themes
-    curl # Needed for fetching papirus-folders script
 )
 
 sudo pacman -S --needed --noconfirm "${CORE_DEPS[@]}" || { print_error "Failed to install core dependencies."; exit 1; }
@@ -120,66 +119,68 @@ else
     print_warning "Failed to clone Catppuccin GTK theme repository."
 fi
 
-# Setup Papirus Folders following Catppuccin README instructions
-print_info "Setting up Catppuccin Papirus folder colors..."
+# Setup Papirus Folders by directly copying Catppuccin icons - Revised Logic v3
+print_info "Setting up Catppuccin Papirus folder icons by direct replacement..."
 
-# Ensure papirus-icon-theme is installed (should be from CORE_DEPS)
+# Ensure papirus-icon-theme is installed (provides the base theme structure)
 if ! pacman -Q papirus-icon-theme &> /dev/null; then
      print_warning "'papirus-icon-theme' package not found. Attempting install..."
      sudo pacman -S --needed --noconfirm papirus-icon-theme || { print_error "Failed to install papirus-icon-theme."; exit 1; }
 fi
 if ! pacman -Q papirus-icon-theme &> /dev/null; then
     print_error "'papirus-icon-theme' is required but could not be installed. Skipping Papirus folder setup."
-    # Set a flag or find a way to skip if this is critical
-    papirus_setup_failed=true
 else
-    papirus_setup_failed=false
-    # Clone the Catppuccin papirus-folders repo for the color definitions
-    print_info "Cloning Catppuccin Papirus color definitions..."
+    print_info "Base 'papirus-icon-theme' package confirmed."
+    # Clone the Catppuccin papirus-folders repo for the pre-rendered icons
+    print_info "Cloning Catppuccin Papirus icon repository..."
     if git clone --depth 1 https://github.com/catppuccin/papirus-folders.git "$TEMP_DIR/catppuccin-papirus-folders"; then
-        # Check if the src directory with color definitions exists
-        if [ -d "$TEMP_DIR/catppuccin-papirus-folders/src" ] && [ "$(ls -A "$TEMP_DIR/catppuccin-papirus-folders/src")" ]; then
-             # Ensure the target directory exists (as per Catppuccin README)
-             print_info "Ensuring target directory /usr/share/icons/Papirus/ exists..."
-             sudo mkdir -p "/usr/share/icons/Papirus/" || print_warning "Failed to create target directory /usr/share/icons/Papirus/"
+        CATPPUCCIN_SRC_DIR="$TEMP_DIR/catppuccin-papirus-folders/src"
 
-             print_info "Copying Catppuccin Papirus color definitions to /usr/share/icons/Papirus/ ..."
-             sudo cp -r "$TEMP_DIR/catppuccin-papirus-folders/src/"* "/usr/share/icons/Papirus/" || print_warning "Failed to copy Papirus color definitions from Catppuccin repo src/."
+        # Check if the src directory exists
+        if [ -d "$CATPPUCCIN_SRC_DIR" ]; then
+            # Define the target base directory for Papirus icons
+            PAPIRUS_ICON_BASE="/usr/share/icons/Papirus"
 
-             # Download the main papirus-folders script (as per Catppuccin README)
-             PAPIRUS_SCRIPT_URL="https://raw.githubusercontent.com/PapirusDevelopmentTeam/papirus-folders/master/papirus-folders"
-             PAPIRUS_SCRIPT_DEST="$TEMP_DIR/papirus-folders-script" # Download to temp dir
-             print_info "Downloading latest papirus-folders script from $PAPIRUS_SCRIPT_URL..."
-             if curl -L --fail -o "$PAPIRUS_SCRIPT_DEST" "$PAPIRUS_SCRIPT_URL"; then
-                 print_info "Making downloaded script executable..."
-                 if chmod +x "$PAPIRUS_SCRIPT_DEST"; then
-                     # Apply the theme color using the downloaded script
-                     print_info "Applying Catppuccin folder color variant (Mauve) using downloaded script..."
-                     # Need sudo to run the script as it modifies system icons/cache
-                     if sudo "$PAPIRUS_SCRIPT_DEST" -C cat-mauve --theme Papirus-Dark; then
-                         print_success "Catppuccin Mauve variant applied for Papirus-Dark icons."
-                         print_info "Run '$PAPIRUS_SCRIPT_DEST -C <color> --theme <Papirus-Theme>' manually to change colors later (or re-run installer)."
-                     else
-                         print_warning "Command '$PAPIRUS_SCRIPT_DEST -C cat-mauve --theme Papirus-Dark' failed. Check script output and permissions."
-                     fi
-                 else
-                     print_warning "Failed to make downloaded papirus-folders script executable at $PAPIRUS_SCRIPT_DEST."
-                 fi
-             else
-                 print_warning "Failed to download papirus-folders script from $PAPIRUS_SCRIPT_URL. Check network or URL."
-             fi
+            print_info "Copying Catppuccin pre-rendered folder icons into Papirus theme..."
+            # Iterate through the size directories found in the Catppuccin src
+            find "$CATPPUCCIN_SRC_DIR" -mindepth 1 -maxdepth 1 -type d -print0 | while IFS= read -r -d $'\0' size_dir; do
+                size_name=$(basename "$size_dir") # e.g., 22x22
+                src_places_dir="$size_dir/places"  # e.g., .../src/22x22/places
+                dest_places_dir="$PAPIRUS_ICON_BASE/$size_name/places" # e.g., /usr/share/icons/Papirus/22x22/places
+
+                if [ -d "$src_places_dir" ]; then
+                    if [ -d "$dest_places_dir" ]; then
+                        print_info " -> Copying icons for size $size_name..."
+                        # Use -T to copy contents of src into dest, overwriting existing
+                        # Use --remove-destination to handle potential symlinks correctly if overwriting
+                        # Need sudo for system directory
+                        # Using rsync might be safer/more verbose:
+                        # sudo rsync -av --delete "$src_places_dir/" "$dest_places_dir/" || print_warning "    Failed to sync $size_name icons."
+                        # Or using cp:
+                        sudo cp -r --remove-destination -T "$src_places_dir" "$dest_places_dir" || print_warning "    Failed to copy $size_name icons."
+                    else
+                        print_warning " -> Target directory not found: $dest_places_dir. Skipping size $size_name."
+                    fi
+                else
+                    print_warning " -> Source 'places' directory not found in $size_dir. Skipping size $size_name."
+                fi
+            done
+
+            print_success "Finished copying Catppuccin folder icons."
+            print_info "Updating GTK icon cache..."
+            # Update icon cache for GTK2/3 apps to see changes
+            sudo gtk-update-icon-cache -f -t /usr/share/icons/Papirus || print_warning "Failed to update GTK icon cache for Papirus."
+
+            print_warning "Note: This method overwrites default Papirus folder icons."
+            print_warning "The 'papirus-folders' script cannot be used to apply Catppuccin colors, but can still be used for other standard colors (which will overwrite these)."
+
         else
-             print_warning "Could not find src/ directory with color folders in the cloned Catppuccin Papirus repo."
+             print_warning "Could not find src/ directory in the cloned Catppuccin Papirus repo."
         fi
     else
         print_warning "Failed to clone Catppuccin Papirus Folders repository."
     fi
 fi # End check for papirus-icon-theme package
-
-# Optional: Clean up downloaded script if needed, though trap should handle TEMP_DIR
-# if [ -f "$PAPIRUS_SCRIPT_DEST" ]; then
-#     # rm "$PAPIRUS_SCRIPT_DEST" # Trap cleans the whole dir anyway
-# fi
 
 # --- Create Necessary Directories ---
 print_info "Creating configuration directories..."
