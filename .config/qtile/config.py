@@ -99,7 +99,7 @@ keys = [
 
 # --- Groups (Workspaces) ---
 # group_names = "123456789" # Simple numbered groups
-group_names = "阮戮ﭮ" # Nerd Font Icons (Term, Web, Files, Code, Music, Video, Social, Chat, Games)
+group_names = "" # Nerd Font Icons (Term, Web, Files, Code, Music, Video, Social, Chat, Games)
 groups = [Group(i) for i in group_names]
 
 for i, name in enumerate(group_names):
