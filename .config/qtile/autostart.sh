@@ -3,7 +3,7 @@
 # Autostart script for Qtile
 
 # Set wallpaper
-feh --bg-fill ~/.config/qtile/wallpaper.jpg & # Change path to your wallpaper
+feh --bg-fill ~/.config/qtile/catppuccin_triangle.png & # Change path to your wallpaper
 
 # Start compositor (picom)
 picom --config ~/.config/picom/picom.conf &
