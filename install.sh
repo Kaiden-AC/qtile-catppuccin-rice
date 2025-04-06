@@ -120,38 +120,45 @@ else
 fi
 
 
-# Clone and setup Papirus Folders
-print_info "Cloning Catppuccin Papirus Folders..."
-if git clone --depth 1 https://github.com/catppuccin/papirus-folders.git "$TEMP_DIR/papirus-folders"; then
-    # --- ADDED: Explicit check for the script file ---
-    if [ ! -f "$TEMP_DIR/papirus-folders/papirus-folders" ]; then
-        print_warning "Main 'papirus-folders' script not found in the cloned repository root. Cannot proceed with Papirus setup."
-    else
-        print_info "Copying Papirus Folder scripts and applying Catppuccin variant (Mauve)..."
-        # Copy base color folders first (important!)
-        if [ -d "$TEMP_DIR/papirus-folders/src" ] && [ "$(ls -A "$TEMP_DIR/papirus-folders/src")" ]; then
-             sudo cp -r "$TEMP_DIR/papirus-folders/src/"* /usr/share/icons/ || print_warning "Failed to copy Papirus base color folders from src/."
-        else
-             print_warning "Could not find src/ directory with color folders in Papirus Folders repo."
-        fi
-        # Copy the script itself
-        if sudo cp "$TEMP_DIR/papirus-folders/papirus-folders" /usr/bin/; then
-            sudo chmod +x /usr/bin/papirus-folders
-            # Attempt to apply the theme color
-            if sudo papirus-folders -C cat-mauve --theme Papirus-Dark; then
-                print_success "Papirus Folders script installed and Catppuccin Mauve variant applied for Papirus-Dark."
-                print_info "You may need to re-run 'sudo papirus-folders -C <color> --theme <Papirus-Theme>' if you change the base Papirus theme."
-            else
-                print_warning "Command 'papirus-folders -C cat-mauve --theme Papirus-Dark' failed. You might need to run it manually after ensuring Papirus-Dark icons are installed correctly."
-            fi
-        else
-            print_warning "Failed to copy papirus-folders script to /usr/bin."
-        fi
-    fi # End check for script file existence
-else
-    print_warning "Failed to clone Catppuccin Papirus Folders repository."
+# Clone and setup Papirus Folders - Revised Logic
+print_info "Setting up Catppuccin Papirus folder colors..."
+# Ensure papirus-icon-theme is installed (should be from CORE_DEPS)
+# This package provides /usr/bin/papirus-folders
+if ! command -v papirus-folders &> /dev/null; then
+    print_warning "'papirus-folders' command not found. Please ensure 'papirus-icon-theme' package is installed correctly."
+    # Optionally attempt to install again or exit
+    # sudo pacman -S --needed --noconfirm papirus-icon-theme || { print_error "Failed to install papirus-icon-theme."; exit 1; }
+    # if ! command -v papirus-folders &> /dev/null; then
+    #    print_error "'papirus-folders' still not found after attempting install. Cannot apply colors."
+    #    # Skip the rest of papirus setup
+    #    continue_script=false # Needs a flag or way to skip if erroring here
+    # fi
 fi
 
+if command -v papirus-folders &> /dev/null; then
+    if git clone --depth 1 https://github.com/catppuccin/papirus-folders.git "$TEMP_DIR/catppuccin-papirus-folders"; then
+        # Check if the src directory with color definitions exists
+        if [ -d "$TEMP_DIR/catppuccin-papirus-folders/src" ] && [ "$(ls -A "$TEMP_DIR/catppuccin-papirus-folders/src")" ]; then
+             print_info "Copying Catppuccin Papirus color definitions..."
+             sudo cp -r "$TEMP_DIR/catppuccin-papirus-folders/src/"* /usr/share/icons/ || print_warning "Failed to copy Papirus base color folders from Catppuccin repo src/."
+
+             # Now attempt to apply the theme color using the system's papirus-folders script
+             print_info "Applying Catppuccin folder color variant (Mauve)..."
+             if sudo papirus-folders -C cat-mauve --theme Papirus-Dark; then
+                 print_success "Catppuccin Mauve variant applied for Papirus-Dark icons."
+                 print_info "You may need to re-run 'sudo papirus-folders -C <color> --theme <Papirus-Theme>' if you change the base Papirus theme."
+             else
+                 print_warning "Command 'papirus-folders -C cat-mauve --theme Papirus-Dark' failed. Ensure colors were copied correctly to /usr/share/icons/ and Papirus-Dark theme exists."
+             fi
+        else
+             print_warning "Could not find src/ directory with color folders in the cloned Catppuccin Papirus repo."
+        fi
+    else
+        print_warning "Failed to clone Catppuccin Papirus Folders repository."
+    fi
+else
+     print_warning "Skipping Papirus color application because 'papirus-folders' command was not found."
+fi
 
 # --- Create Necessary Directories ---
 print_info "Creating configuration directories..."
